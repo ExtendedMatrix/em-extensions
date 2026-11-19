@@ -112,6 +112,28 @@ A new version of a package in em-profiles reaches the index with a pull
 request here that runs `tools/generate.py --lock` (the em-profiles commit in
 `sources.lock.json`) and commits `index.json`.
 
+## Good practice — the stamp on derived artifacts
+
+*Encouraged, not required* (decision G-5, 19 November 2026). A plugin whose
+code makes files from other files — a PNG cut from a slice, a cache, a baked
+drape, a resampled raster, a glb, an export — writes the **stamp** of each
+beside it: `<file>.stamp.json`, the record of that one step in the format of
+[dtcstamp](https://github.com/zalmoxes-laran/dtcstamp) (the plugin as the
+agent with its id and version, the parameters, the inputs by identity, the
+artifact by digest). From the `em` API 1.2 it is one line:
+
+```python
+ctx.stamp(png, inputs=[source_file], parameters={"colormap": "viridis"},
+          dtc_kind="format_conversion", technique="slice rasterization")
+```
+
+A plugin without stamps is built, listed, installed and run as any other;
+`tools/generate.py` and the validator say it at most as a piece of advice
+(the warning `code_stamp_advice`), never as an error. When, how, where the
+stamp lives and how it joins the graph's DTC (acquisition → resource →
+derived artifact): em-profiles
+[SPEC.md §6.7](https://github.com/ExtendedMatrix/em-profiles/blob/main/SPEC.md).
+
 ## The signature (row X8)
 
 On `main` the CI signs what it publishes with a **minisign** key (Ed25519):
