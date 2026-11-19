@@ -1,5 +1,78 @@
 {
   "blocklist": [],
-  "data": [],
+  "data": [
+    {
+      "archive_hash": "sha256:d6e9ded238610c88bf221397681beaf8ec5193a088c60f292fc07410fd939cd2",
+      "archive_size": 100177,
+      "archive_url": "https://extendedmatrix.github.io/em-extensions/geofisica-0.1.0.zip",
+      "content_hash": "sha256:231862658ad45de223f1fb42a33ce7fce233348ba25474395472cdf6f47f50af",
+      "em_api_min": "1.2",
+      "id": "geofisica",
+      "license": [
+        "SPDX:CC-BY-4.0",
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "maintainer": "Emanuel Demetrescu (CNR-ISPC)",
+      "name": "Geofisica",
+      "permissions": {
+        "files": "Reads the chosen geophysical stacks and writes their slice cache"
+      },
+      "requires": {
+        "core": {
+          "em": ">=1.6,<1.7"
+        }
+      },
+      "schema_version": "1.0.0",
+      "sections": {
+        "code": {
+          "capabilities": [
+            "read-graph",
+            "write-graph"
+          ],
+          "digest": "sha256:3fe9da904a72e94a335e57beb92f37b82a03635f3441b3c048e1468dcc48e824",
+          "hosts": [
+            "emstudio",
+            "blender"
+          ],
+          "module": "geofisica",
+          "permissions": {
+            "files": "Reads the chosen geophysical stacks and writes their slice cache"
+          },
+          "platforms": [],
+          "version": "0.1.0"
+        },
+        "data": {
+          "digest": "sha256:250909015590b123cbe09506ad5d22eb1b177486739c9d6722c28b94e8235836",
+          "version": "0.1.0",
+          "vocabularies": [
+            {
+              "digest": "sha256:150c69f30981aa2be662ba40c4f4f20aeb4f80072d3963407b84f073e8de4352",
+              "fascia": "A",
+              "license": "SPDX:CC-BY-4.0",
+              "scheme": "https://w3id.org/extendedmatrix/profile/geofisica/vocab/anomalie/",
+              "version": "0.1.0"
+            },
+            {
+              "digest": "sha256:973912f6dd1a82aff9859acf8a93944fe686f7024d8c66eed3cefd3d16172e60",
+              "fascia": "A",
+              "license": "SPDX:CC-BY-4.0",
+              "scheme": "https://w3id.org/extendedmatrix/profile/geofisica/vocab/metodi/",
+              "version": "0.1.0"
+            },
+            {
+              "digest": "sha256:52f5c8c6d11f13e24603b0c34ceef81eee89178edbb5fce4da464a37cd0eb8b4",
+              "fascia": "A",
+              "license": "SPDX:CC-BY-4.0",
+              "scheme": "https://w3id.org/extendedmatrix/profile/geofisica/vocab/grandezze/",
+              "version": "0.1.0"
+            }
+          ]
+        }
+      },
+      "tagline": "Geophysical slices as documents: GPR, ERT and more",
+      "type": "mixed",
+      "version": "0.1.0"
+    }
+  ],
   "version": "v1"
 }
