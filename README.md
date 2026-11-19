@@ -20,8 +20,9 @@ EM Tools for Blender, a script with `from s3dgraphy import em`.
 > archives per platform (X3) are there too (`python -m s3dgraphy.extensions
 > updates|update-all|versions|use|clean`, `build --split-platforms`; this
 > index may list one archive per platform of the same id and version). EM
-> Tools as a client (X6): not yet. The list of the reviewed (X4) is read:
-> see below. The address below is not yet served.
+> Tools reads the same repositories (X6): Preferences ▸ Community packages ▸
+> Repositories, for the community packages and the plugins whose code names
+> `blender`. The list of the reviewed (X4) is read: see below. The address below is not yet served.
 
 **Address (once published):** `https://extendedmatrix.github.io/em-extensions/index.json`
 
