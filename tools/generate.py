@@ -56,7 +56,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 REPO = Path(__file__).resolve().parents[1]
-BASE_URL = "https://extendedmatrix.github.io/em-extensions/"
+BASE_URL = "https://extensions.extendedmatrix.org/"
 LOCK = "sources.lock.json"
 #: X8 · the public key committed here, and where the CI's secret key comes from
 PUBLIC_KEY = "minisign.pub"

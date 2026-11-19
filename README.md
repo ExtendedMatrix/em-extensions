@@ -24,7 +24,7 @@ EM Tools for Blender, a script with `from s3dgraphy import em`.
 > Repositories, for the community packages and the plugins whose code names
 > `blender`. The list of the reviewed (X4) is read: see below. The address below is not yet served.
 
-**Address (once published):** `https://extendedmatrix.github.io/em-extensions/index.json`
+**Address:** `https://extensions.extendedmatrix.org/index.json` (a CNAME of extendedmatrix.org, like `blender.extendedmatrix.org`; the earlier `https://extendedmatrix.github.io/em-extensions/` redirects here)
 
 ## What is in the index
 

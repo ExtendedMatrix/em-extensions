@@ -4,7 +4,7 @@
     {
       "archive_hash": "sha256:d6e9ded238610c88bf221397681beaf8ec5193a088c60f292fc07410fd939cd2",
       "archive_size": 100177,
-      "archive_url": "https://extendedmatrix.github.io/em-extensions/geofisica-0.1.0.zip",
+      "archive_url": "https://extensions.extendedmatrix.org/geofisica-0.1.0.zip",
       "content_hash": "sha256:231862658ad45de223f1fb42a33ce7fce233348ba25474395472cdf6f47f50af",
       "em_api_min": "1.2",
       "id": "geofisica",
