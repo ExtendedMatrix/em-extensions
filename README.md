@@ -134,7 +134,7 @@ archives together is refused. A signature says who published the bytes, not
 that anyone read the code: the question of trust stays, the reviewed are the
 list above.
 
-**Not yet switched on.** The key does not exist yet. To switch it on (E.D.):
+**Switched on** on 19 Nov 2026: `minisign.pub` is at the root, the secret key is the repository secret `EM_EXTENSIONS_SIGNING_KEY`. How it was switched on (and how a laboratory does the same for its own repository):
 
 1. `python -m s3dgraphy.extensions sign keygen ~/em-extensions.key` (add
    `--encrypt` with `S3DGRAPHY_SIGN_PASSWORD` set for a key kept on a
@@ -147,7 +147,7 @@ list above.
    `s3dgraphy/extensions/remote.py`, so that the tools verify the official
    index without the person pasting it.
 
-Until then `--sign` says «published unsigned» and nothing changes for the
+Without `minisign.pub`, `--sign` says «published unsigned» and nothing changes for the
 clients.
 
 ## Other repositories
