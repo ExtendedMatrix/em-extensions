@@ -25,6 +25,18 @@ index. A plugin listed here is **not** reviewed by being listed: until its
 code digest is in `reviewed.json` (row X4), the tools install it as
 «not verified», with the question of trust.
 
+## Reviewing a plugin
+
+The editor, or a curator of a community package that requires the plugin,
+reads its code and adds a line to `reviewed.json` in a pull request:
+
+    python -m s3dgraphy.extensions review add dist/<id>-<version>.zip --reviewed . --by @you --as curator:<package>
+
+The review is of the digest of the **code section**: a new version whose
+code did not change keeps it; a new code needs a new review. An author does
+not review their own plugin alone. See the README, «The list of the
+reviewed».
+
 ## Withdrawing
 
 An id goes into `blocklist.json` with its `reason` (English) and

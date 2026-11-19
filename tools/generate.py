@@ -21,6 +21,16 @@
    whoever reviews it. ``--check`` writes nothing at the root and fails when
    the committed index is not the one these sources give.
 
+5. ``reviewed.json`` (row X4) is checked against decision D-6: a review is
+   written by the **editor** (``"as": "editor"``, an owner of
+   ``/reviewed.json`` in this repository's CODEOWNERS) or by a **curator of
+   a package that requires the plugin** (``"as": "curator:<package>"``, an
+   owner of ``/profiles/<package>/`` in em-profiles' CODEOWNERS, the package
+   requiring the id — or being it, for a mixed package's own code); ``by`` is
+   the GitHub handle (``@name``) CODEOWNERS knows; an author of a plugin of
+   ``plugins/`` does not review it alone. Add a line with
+   ``python -m s3dgraphy.extensions review add <archive> --reviewed . --by @you --as …``.
+
 ``--lock`` writes the em-profiles commit of the checkout into
 ``sources.lock.json`` (refused when ``profiles/`` there has changes not
 committed). Exit 1 on any error; warnings never fail.
@@ -29,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -58,6 +69,21 @@ MESSAGES = {
                      "{id}: in em-profiles e in plugins/ — un id, un posto"),
     "gen_index_differs": ("index.json is not the index of these sources: run tools/generate.py and commit it",
                           "index.json non è l'indice di queste sorgenti: lancia tools/generate.py e committalo"),
+    # X4 · who may review (decision D-6)
+    "gen_review_by": ("reviewed.json: {id}: by must be a GitHub handle (@name), not {by!r}",
+                      "reviewed.json: {id}: by dev'essere un nome GitHub (@nome), non {by!r}"),
+    "gen_review_as": ("reviewed.json: {id}: as must be editor or curator:<package>, not {as_!r}",
+                      "reviewed.json: {id}: as dev'essere editor o curator:<pacchetto>, non {as_!r}"),
+    "gen_review_not_editor": ("reviewed.json: {id}: {by} is not an owner of /reviewed.json in CODEOWNERS",
+                              "reviewed.json: {id}: {by} non è tra i titolari di /reviewed.json in CODEOWNERS"),
+    "gen_review_no_package": ("reviewed.json: {id}: the package {package} is not in em-profiles",
+                              "reviewed.json: {id}: il pacchetto {package} non è in em-profiles"),
+    "gen_review_not_curator": ("reviewed.json: {id}: {by} is not a curator of {package} (em-profiles CODEOWNERS)",
+                               "reviewed.json: {id}: {by} non è un curatore di {package} (CODEOWNERS di em-profiles)"),
+    "gen_review_not_required": ("reviewed.json: {id}: {package} does not require it: its curators do not review it",
+                                "reviewed.json: {id}: {package} non lo richiede: non lo rivedono i suoi curatori"),
+    "gen_review_self": ("reviewed.json: {id}: {by} is an author of plugins/{id}/: a second reader reviews it",
+                        "reviewed.json: {id}: {by} è un autore di plugins/{id}/: lo rivede un secondo lettore"),
 }
 
 
@@ -110,6 +136,67 @@ def plugin_checks(root: Path, opened: Dict[Path, object]) -> List[Dict]:
     return out
 
 
+def codeowners(root: Path) -> Dict[str, List[str]]:
+    """``/path/`` → its owners, from ``.github/CODEOWNERS`` (comments skipped)."""
+    f = root / ".github" / "CODEOWNERS"
+    out: Dict[str, List[str]] = {}
+    if not f.is_file():
+        return out
+    for line in f.read_text(encoding="utf-8").splitlines():
+        parts = line.split("#", 1)[0].split()
+        if len(parts) >= 2:
+            out[parts[0]] = [p for p in parts[1:] if p.startswith("@")]
+    return out
+
+
+def review_checks(root: Path, em_profiles: Path) -> List[Dict]:
+    """X4 · every line of ``reviewed.json`` against decision D-6 (see the head)."""
+    from s3dgraphy.profiles.package import open_package
+
+    f = root / "reviewed.json"
+    try:
+        doc = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    except ValueError:
+        return []   # the library says it (index_list_unreadable)
+    rows = doc.get("reviewed") if isinstance(doc, dict) else doc
+    ours, theirs = codeowners(root), codeowners(em_profiles)
+    editors = set(ours.get("/reviewed.json") or [])
+    out = []
+    for r in rows or []:
+        if not isinstance(r, dict):
+            continue
+        rid, by, as_ = str(r.get("id")), str(r.get("by") or ""), str(r.get("as") or "")
+        if not re.match(r"^@[A-Za-z0-9][A-Za-z0-9-]*(/[A-Za-z0-9._-]+)?$", by):
+            out.append(problem("gen_review_by", id=rid, by=by))
+            continue
+        if as_ == "editor":
+            if by not in editors:
+                out.append(problem("gen_review_not_editor", id=rid, by=by))
+            continue
+        if not as_.startswith("curator:") or not as_[len("curator:"):]:
+            out.append(problem("gen_review_as", id=rid, as_=as_))
+            continue
+        pkg = as_[len("curator:"):]
+        folder = em_profiles / "profiles" / pkg
+        if not folder.is_dir():
+            out.append(problem("gen_review_no_package", id=rid, package=pkg))
+            continue
+        if by not in (theirs.get(f"/profiles/{pkg}/") or []):
+            out.append(problem("gen_review_not_curator", id=rid, by=by, package=pkg))
+            continue
+        try:
+            req = open_package(folder).requires() if pkg != rid else {}
+        except Exception:    # the build says what is wrong with the package
+            req = {}
+        wanted = {str(x.get("id")) for x in (req.get("extensions") or []) if isinstance(x, dict)}
+        if pkg != rid and rid not in wanted:
+            out.append(problem("gen_review_not_required", id=rid, package=pkg))
+            continue
+        if by in (ours.get(f"/plugins/{rid}/") or []):
+            out.append(problem("gen_review_self", id=rid, by=by))
+    return out
+
+
 def generate(em_profiles: Path, *, root: Path = None, base_url: str = BASE_URL, out: Path = None,
              check: bool = False, lock: bool = False) -> Dict:
     from s3dgraphy.extensions import build, server_generate
@@ -132,6 +219,7 @@ def generate(em_profiles: Path, *, root: Path = None, base_url: str = BASE_URL, 
         res["problems"].append(problem("gen_lock_differs", head=head[:12], lock=want[:12]))
     plugins = {p: open_package(p) for p in folders(root / "plugins")}
     res["problems"] += plugin_checks(root, plugins)
+    res["problems"] += review_checks(root, em_profiles)
     sources = [(p, f"profiles/{p.name}") for p in folders(em_profiles / "profiles")] + \
               [(p, f"plugins/{p.name}") for p in plugins]
     ids: Dict[str, str] = {}

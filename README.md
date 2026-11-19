@@ -20,7 +20,8 @@ EM Tools for Blender, a script with `from s3dgraphy import em`.
 > archives per platform (X3) are there too (`python -m s3dgraphy.extensions
 > updates|update-all|versions|use|clean`, `build --split-platforms`; this
 > index may list one archive per platform of the same id and version). EM
-> Tools as a client (X6): not yet. The address below is not yet served.
+> Tools as a client (X6): not yet. The list of the reviewed (X4) is read:
+> see below. The address below is not yet served.
 
 **Address (once published):** `https://extendedmatrix.github.io/em-extensions/index.json`
 
@@ -47,9 +48,43 @@ An entry carries Blender's fields (`id`, `version`, `name`, `tagline`,
 - `content_hash` — the hash over the archive's files that an installation
   keeps in `installed.json`; `archive_hash` is the hash of the zip's bytes,
   checked after the download and before opening it;
-- `reviewed` — who read the code (its digest), and when: from
-  `reviewed.json` (row X4 fills it; a reviewed plugin will install without
-  the second confirmation).
+- `reviewed` — who read the code, when and in which role (`by`, `on`,
+  `as`, `digest`): from `reviewed.json`, when the digest reviewed is the
+  entry's **code section** (its data, for an archive with no code). A
+  data-only update keeps the code's digest, so it keeps its review; a code
+  changed by one byte is a code nobody has read yet.
+
+## The list of the reviewed (row X4)
+
+The trust in the beta is a list, not a signature (decision D-6): a plugin
+is reviewed **by the editor** or **by the curators of a community package
+that requires it**. `reviewed.json`:
+
+```json
+{"reviewed": [{"id": "facemesh_fit", "digest": "sha256:…", "by": "@handle",
+               "as": "editor | curator:<package>", "on": "2026-11-19", "note": "…"}]}
+```
+
+A line is added with
+
+```
+python -m s3dgraphy.extensions review add dist/<id>-<version>.zip --reviewed . --by @you --as curator:<package>
+```
+
+and the CI checks it: `by` is the GitHub handle CODEOWNERS knows; `editor`
+is an owner of `/reviewed.json` here; `curator:<package>` an owner of
+`/profiles/<package>/` in em-profiles, the package requiring the plugin (or
+being it, for a mixed package's own code); an author of `plugins/<id>/` does
+not review it alone.
+
+What the tools do with it: a code whose digest this index lists as reviewed
+installs **without the trust question** and is marked verified (with who
+read it) in the Extensions window, in the menus and in the log of the acts
+it writes. The reviews of this index count by default; those of any other
+repository only once the person turns them on for it («Fidati delle
+revisioni di questo repository»). A review taken out of this list makes the
+installed code «not verified» again at the next refresh: it stays
+installed.
 
 `blocklist.json` lists the ids withdrawn, with the reason the window shows;
 a withdrawn id is never listed.

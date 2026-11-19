@@ -106,17 +106,57 @@ def test_what_only_a_repository_sees_fails_the_index(frame, tmp_path):
 def test_blocklist_and_reviewed_come_from_this_repository(frame, tmp_path):
     root, emp = frame
     shutil.copytree(EXAMPLES / "facemesh_fit", root / "plugins" / "facemesh_fit")
-    (root / ".github" / "CODEOWNERS").write_text("/plugins/facemesh_fit/ @zalmoxes-laran\n", encoding="utf-8")
+    (root / ".github" / "CODEOWNERS").write_text("/plugins/facemesh_fit/ @autore\n/reviewed.json @zalmoxes-laran\n",
+                                                 encoding="utf-8")
     code = X.index_entry(None, blob=_zip(EXAMPLES / "facemesh_fit", tmp_path), archive_url="x")[0]["sections"]["code"]
     (root / "reviewed.json").write_text(json.dumps({"reviewed": [
-        {"id": "facemesh_fit", "digest": code["digest"], "by": "orcid:0000-0002-1825-0097", "on": "2026-11-19"}]}),
+        {"id": "facemesh_fit", "digest": code["digest"], "by": "@zalmoxes-laran", "as": "editor", "on": "2026-11-19"}]}),
         encoding="utf-8")
     res = generate.generate(emp, root=root, out=tmp_path / "dist")
-    assert res["index"]["data"][0]["reviewed"]["by"] == "orcid:0000-0002-1825-0097"
+    assert res["ok"], res["problems"]
+    assert res["index"]["data"][0]["reviewed"]["by"] == "@zalmoxes-laran"
+    assert res["index"]["data"][0]["reviewed"]["as"] == "editor"
     (root / "blocklist.json").write_text(json.dumps({"blocklist": [
         {"id": "facemesh_fit", "reason": "example withdrawn", "reason_it": "esempio ritirato"}]}), encoding="utf-8")
     res = generate.generate(emp, root=root, out=tmp_path / "dist")
     assert res["ok"] and res["index"]["data"] == [] and res["index"]["blocklist"][0]["reason_it"] == "esempio ritirato"
+
+
+@needs_examples
+def test_who_may_review_follows_d6(frame, tmp_path):
+    """X4 · the editor, or a curator of a package that requires the plugin;
+    never its author alone; by the GitHub handle CODEOWNERS knows."""
+    root, emp = frame
+    shutil.copytree(EXAMPLES / "facemesh_fit", root / "plugins" / "facemesh_fit")
+    shutil.copytree(EXAMPLES / "esempio-statuaria", emp / "profiles" / "esempio-statuaria")
+    shutil.copytree(EXAMPLES / "example-toolmarks", emp / "profiles" / "example-toolmarks")
+    (root / ".github" / "CODEOWNERS").write_text(
+        "/reviewed.json @zalmoxes-laran\n/plugins/facemesh_fit/ @autore @curatrice\n", encoding="utf-8")
+    (emp / ".github").mkdir()
+    (emp / ".github" / "CODEOWNERS").write_text(
+        "/profiles/esempio-statuaria/ @curatrice @curatore\n/profiles/example-toolmarks/ @altro\n", encoding="utf-8")
+    digest = X.review_digest(EXAMPLES / "facemesh_fit")["digest"]
+
+    def with_rows(*rows):
+        (root / "reviewed.json").write_text(json.dumps({"reviewed": [
+            dict(id="facemesh_fit", digest=digest, on="2026-11-19", **r) for r in rows]}), encoding="utf-8")
+        return generate.review_checks(root, emp)
+
+    assert with_rows({"by": "@zalmoxes-laran", "as": "editor"}) == []
+    assert with_rows({"by": "@curatore", "as": "curator:esempio-statuaria"}) == []
+    codes = lambda ps: sorted(p["code"] for p in ps)
+    assert codes(with_rows({"by": "orcid:0000-0002-1825-0097", "as": "editor"})) == ["gen_review_by"]
+    assert codes(with_rows({"by": "@curatore", "as": "editor"})) == ["gen_review_not_editor"]
+    assert codes(with_rows({"by": "@curatore"})) == ["gen_review_as"]
+    assert codes(with_rows({"by": "@curatore", "as": "curator:nessuno"})) == ["gen_review_no_package"]
+    assert codes(with_rows({"by": "@altro", "as": "curator:esempio-statuaria"})) == ["gen_review_not_curator"]
+    assert codes(with_rows({"by": "@altro", "as": "curator:example-toolmarks"})) == ["gen_review_not_required"]
+    # a curator who is also an author of the plugin does not review it alone
+    ps = with_rows({"by": "@curatrice", "as": "curator:esempio-statuaria"})
+    assert codes(ps) == ["gen_review_self"] and "secondo lettore" in ps[0]["it"]
+    # the whole generation fails on it
+    res = generate.generate(emp, root=root, out=tmp_path / "dist")
+    assert not res["ok"] and "gen_review_self" in _codes(res)
 
 
 def _zip(folder: Path, tmp_path: Path) -> bytes:
