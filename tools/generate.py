@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""Generate the index of the EM extensions, as the CI does.
+
+    python tools/generate.py [--em-profiles PATH] [--base-url URL] [--out DIR]
+                             [--check] [--lock] [--lang en|it] [--json]
+
+1. The archives come from two places: the community packages of
+   ExtendedMatrix/em-profiles (``profiles/<id>/``, a checkout at the commit
+   named in ``sources.lock.json``) and the plugins of this repository
+   (``plugins/<id>/``, code without data).
+2. Each folder is built with ``s3dgraphy.extensions.build`` (deterministic:
+   the same folder gives the same bytes) into ``--out`` (``dist/``).
+3. ``s3dgraphy.extensions.server_generate`` lists them in
+   ``dist/index.json`` and ``dist/index.html``, in the form of Blender's
+   Extension Listing API v1, with ``archive_url`` under ``--base-url`` and the
+   ``blocklist.json`` and ``reviewed.json`` of this repository. It refuses
+   what the one validator of the EM tools refuses, and what only a repository
+   sees (a version reused, a vocabulary copied from its owner, a cycle).
+4. ``dist/index.json`` is copied to ``index.json`` at the root, which is
+   committed: a pull request shows the change of the index, hash by hash, to
+   whoever reviews it. ``--check`` writes nothing at the root and fails when
+   the committed index is not the one these sources give.
+
+``--lock`` writes the em-profiles commit of the checkout into
+``sources.lock.json`` (refused when ``profiles/`` there has changes not
+committed). Exit 1 on any error; warnings never fail.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional
+
+REPO = Path(__file__).resolve().parents[1]
+BASE_URL = "https://extendedmatrix.github.io/em-extensions/"
+LOCK = "sources.lock.json"
+
+#: this repository's own problems, in the two languages of the EM tools
+MESSAGES = {
+    "gen_no_profiles": ("{path}: not a checkout of em-profiles (no profiles/ folder)",
+                        "{path}: non è una copia di em-profiles (manca la cartella profiles/)"),
+    "gen_lock_differs": ("em-profiles is at {head}, sources.lock.json says {lock}: check out {lock}, or --lock",
+                         "em-profiles è a {head}, sources.lock.json dice {lock}: porta la copia a {lock}, oppure --lock"),
+    "gen_lock_dirty": ("em-profiles has changes not committed in profiles/: commit them before --lock",
+                       "em-profiles ha modifiche non committate in profiles/: committale prima di --lock"),
+    "gen_build": ("{where}: not built — {why}", "{where}: non costruito — {why}"),
+    "gen_plugin_folder": ("plugins/{folder}: the folder must be named as the plugin id ({id})",
+                          "plugins/{folder}: la cartella deve chiamarsi come l'id del plugin ({id})"),
+    "gen_plugin_data": ("plugins/{folder}: an archive with data is a community package: it goes to em-profiles",
+                        "plugins/{folder}: un archivio con dati è un pacchetto di comunità: va in em-profiles"),
+    "gen_plugin_owners": ("plugins/{folder}: no line for /plugins/{folder}/ in .github/CODEOWNERS (its authors review it)",
+                          "plugins/{folder}: manca la riga /plugins/{folder}/ in .github/CODEOWNERS (lo rivedono i suoi autori)"),
+    "gen_id_twice": ("{id}: in em-profiles and in plugins/ — one id, one place",
+                     "{id}: in em-profiles e in plugins/ — un id, un posto"),
+    "gen_index_differs": ("index.json is not the index of these sources: run tools/generate.py and commit it",
+                          "index.json non è l'indice di queste sorgenti: lancia tools/generate.py e committalo"),
+}
+
+
+def say(code: str, lang: str, **params) -> str:
+    en, it = MESSAGES[code]
+    return (it if lang.startswith("it") else en).format(**params)
+
+
+def problem(code: str, level: str = "error", **params) -> Dict:
+    return {"code": code, "level": level, "en": say(code, "en", **params), "it": say(code, "it", **params)}
+
+
+def folders(root: Path) -> List[Path]:
+    """The archives of a folder: its sub-folders with an envelope or a profile."""
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")
+                  and ((p / "em-extension.toml").is_file() or (p / "profile.json").is_file()))
+
+
+def git(path: Path, *args: str) -> Optional[str]:
+    try:
+        out = subprocess.run(["git", "--no-optional-locks", "-C", str(path), *args], capture_output=True,
+                             text=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return out.stdout.strip()
+
+
+def read_lock(root: Path = None) -> Dict:
+    f = (root or REPO) / LOCK
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def plugin_checks(root: Path, opened: Dict[Path, object]) -> List[Dict]:
+    owners = ((root / ".github" / "CODEOWNERS").read_text(encoding="utf-8").split()
+              if (root / ".github" / "CODEOWNERS").is_file() else [])
+    out = []
+    for path, pkg in opened.items():
+        folder = path.name
+        if pkg.id and pkg.id != folder:
+            out.append(problem("gen_plugin_folder", folder=folder, id=pkg.id))
+        if pkg.has_data:
+            out.append(problem("gen_plugin_data", folder=folder))
+        if f"/plugins/{folder}/" not in owners:
+            out.append(problem("gen_plugin_owners", folder=folder))
+    return out
+
+
+def generate(em_profiles: Path, *, root: Path = None, base_url: str = BASE_URL, out: Path = None,
+             check: bool = False, lock: bool = False) -> Dict:
+    from s3dgraphy.extensions import build, server_generate
+    from s3dgraphy.profiles.package import open_package
+
+    root = root or REPO
+    out = out or root / "dist"
+    res: Dict = {"problems": [], "built": [], "index": None, "ok": False}
+    if not (em_profiles / "profiles").is_dir():
+        res["problems"].append(problem("gen_no_profiles", path=str(em_profiles)))
+        return res
+    head = git(em_profiles, "rev-parse", "HEAD")
+    if lock:
+        if git(em_profiles, "status", "--porcelain", "--", "profiles"):
+            res["problems"].append(problem("gen_lock_dirty"))
+            return res
+        (root / LOCK).write_text(json.dumps({"em-profiles": head}, indent=2) + "\n", encoding="utf-8")
+    want = read_lock(root).get("em-profiles")
+    if want and head and head != want:
+        res["problems"].append(problem("gen_lock_differs", head=head[:12], lock=want[:12]))
+    plugins = {p: open_package(p) for p in folders(root / "plugins")}
+    res["problems"] += plugin_checks(root, plugins)
+    sources = [(p, f"profiles/{p.name}") for p in folders(em_profiles / "profiles")] + \
+              [(p, f"plugins/{p.name}") for p in plugins]
+    ids: Dict[str, str] = {}
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    for path, where in sources:
+        b = build(path, output_dir=out)
+        if not b["ok"]:
+            why = "; ".join(e["en"] for e in b["errors"] if e["code"] != "build_refused")
+            why_it = "; ".join(e["it"] for e in b["errors"] if e["code"] != "build_refused")
+            p = problem("gen_build", where=where, why=why)
+            p["it"] = say("gen_build", "it", where=where, why=why_it)
+            res["problems"].append(p)
+            continue
+        if b["id"] in ids and ids[b["id"]].split("/")[0] != where.split("/")[0]:
+            res["problems"].append(problem("gen_id_twice", id=b["id"]))
+        ids.setdefault(b["id"], where)
+        res["built"].append({"where": where, "file": b["file"], "archive_hash": b["archive_hash"]})
+    gen = server_generate(out, base_url=base_url, blocklist=root / "blocklist.json", reviewed=root / "reviewed.json",
+                          html_page=True)
+    res["index"] = gen["index"]
+    res["listed"], res["refused"] = gen["listed"], gen["refused"]
+    res["problems"] += gen["problems"]
+    for x in gen["refused"]:
+        res["problems"] += [p for p in x["errors"] if p not in gen["problems"]]
+    committed = root / "index.json"
+    text = (out / "index.json").read_text(encoding="utf-8")
+    if check:
+        same = committed.is_file() and committed.read_text(encoding="utf-8") == text
+        if not same:
+            res["problems"].append(problem("gen_index_differs"))
+    else:
+        committed.write_text(text, encoding="utf-8")
+    res["ok"] = not any(p["level"] == "error" for p in res["problems"])
+    return res
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="Generate the index of the EM extensions, as the CI does")
+    ap.add_argument("--em-profiles", type=Path, default=REPO.parent / "em-profiles",
+                    help="a checkout of ExtendedMatrix/em-profiles (default: beside this repository)")
+    ap.add_argument("--base-url", default=BASE_URL, help=f"where the archives are served (default {BASE_URL})")
+    ap.add_argument("--out", type=Path, default=REPO / "dist", help="the archives, index.json and index.html")
+    ap.add_argument("--check", action="store_true", help="fail when the committed index.json is not this one")
+    ap.add_argument("--lock", action="store_true", help="record the em-profiles commit in sources.lock.json")
+    ap.add_argument("--lang", default="en", choices=("en", "it"))
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args(argv)
+    res = generate(a.em_profiles, base_url=a.base_url, out=a.out, check=a.check, lock=a.lock)
+    if a.json:
+        print(json.dumps(res, indent=1, ensure_ascii=False))
+        return 0 if res["ok"] else 1
+    for x in res.get("listed") or []:
+        print(f"OK   {x['file']}  {x['type']}")
+    for p in res["problems"]:
+        print(f"{'FAIL' if p['level'] == 'error' else 'note'} {p[a.lang]}")
+    n = len((res["index"] or {}).get("data") or [])
+    print((f"{n} entries" if a.lang == "en" else f"{n} voci") + (" — ok" if res["ok"] else ""), file=sys.stderr)
+    return 0 if res["ok"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

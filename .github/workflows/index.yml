@@ -1,0 +1,42 @@
+name: index
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the em-profiles commit this index is made from
+        id: lock
+        run: echo "sha=$(python3 -c 'import json; print(json.load(open("sources.lock.json"))["em-profiles"])')" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ExtendedMatrix/em-profiles
+          ref: ${{ steps.lock.outputs.sha }}
+          path: em-profiles
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: the committed index.json is the index of these sources
+        run: python tools/generate.py --em-profiles em-profiles --check
+      - run: pytest -q
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  publish:
+    # the archives, index.json and index.html at https://extendedmatrix.github.io/em-extensions/
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: index
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    steps:
+      - uses: actions/deploy-pages@v4
