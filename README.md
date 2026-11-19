@@ -16,7 +16,10 @@ EM Tools for Blender, a script with `from s3dgraphy import em`.
 > installed first. The same from a script (`em.extensions.add_repository`,
 > `install_from`) and the command line (`python -m s3dgraphy.extensions repo
 > add|sync|install`). An https repository is read only with «Allow online
-> access» on (off by default). Side-by-side versions and «Update all» (X3), EM
+> access» on (off by default). Side-by-side versions, «Update all» and the
+> archives per platform (X3) are there too (`python -m s3dgraphy.extensions
+> updates|update-all|versions|use|clean`, `build --split-platforms`; this
+> index may list one archive per platform of the same id and version). EM
 > Tools as a client (X6): not yet. The address below is not yet served.
 
 **Address (once published):** `https://extendedmatrix.github.io/em-extensions/index.json`
