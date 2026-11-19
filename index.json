@@ -2,10 +2,10 @@
   "blocklist": [],
   "data": [
     {
-      "archive_hash": "sha256:e12f194cfe292eafd682a0017226bf08cde66250c9e5626245fe0e7f6a108bc3",
-      "archive_size": 100455,
+      "archive_hash": "sha256:868a6656ae00ebb29ebc13fcdf128ef1ab5bdaeeed4d93a571bfb4463bca4fd0",
+      "archive_size": 105307,
       "archive_url": "https://extensions.extendedmatrix.org/geofisica-0.1.0.zip",
-      "content_hash": "sha256:9e12d3b0483c63de2f08eb58e74604419e330b05f49673baa5764d5d15daa22b",
+      "content_hash": "sha256:a1ef8fcc765c5fecaecb1ab4f507a4c7bbc33bd24a065cb6b3a8a0d85b826c70",
       "em_api_min": "1.2",
       "id": "geofisica",
       "license": [
@@ -29,7 +29,7 @@
             "read-graph",
             "write-graph"
           ],
-          "digest": "sha256:62469304d03cdded0836c1d259abcb9a8ae8934270652500895771dd29788811",
+          "digest": "sha256:81f1a08ee52ca4ce2ee3d11617e6f8b3ca76f2ef669350801ee8aeb6d2b8e287",
           "hosts": [
             "emstudio",
             "blender"
@@ -42,7 +42,7 @@
           "version": "0.1.0"
         },
         "data": {
-          "digest": "sha256:250909015590b123cbe09506ad5d22eb1b177486739c9d6722c28b94e8235836",
+          "digest": "sha256:7676bfe00108255bcd5ba35af78fb645b213b9c70424aa6150146a0bacc3a896",
           "version": "0.1.0",
           "vocabularies": [
             {
