@@ -7,10 +7,17 @@ of Blender's
 which the EM tools read as a **repository** — EMStudio's *Tools ▸ Extensions…*,
 EM Tools for Blender, a script with `from s3dgraphy import em`.
 
-> **Status.** The index exists and is generated; the tools that add a
-> repository, install from it and update (rows X2, X3, X6 of the extensions
-> plan) do not yet. Until then archives are installed from disk, and the
-> address below is not yet served.
+> **Status.** The index exists and is generated. EMStudio reads a repository
+> (row X2 of the extensions plan): *Tools ▸ Extensions… ▸ Repositories ▸
+> + Add repository…*, the address of an `index.json` — this one, any other, a
+> `file://` URL or a shared folder — with an optional access token and «Check
+> for updates at start-up»; the archive is checked against `archive_hash`
+> before it is opened, the `blocklist` is respected, `[requires]` are
+> installed first. The same from a script (`em.extensions.add_repository`,
+> `install_from`) and the command line (`python -m s3dgraphy.extensions repo
+> add|sync|install`). An https repository is read only with «Allow online
+> access» on (off by default). Side-by-side versions and «Update all» (X3), EM
+> Tools as a client (X6): not yet. The address below is not yet served.
 
 **Address (once published):** `https://extendedmatrix.github.io/em-extensions/index.json`
 
