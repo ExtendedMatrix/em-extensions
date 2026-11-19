@@ -112,6 +112,44 @@ A new version of a package in em-profiles reaches the index with a pull
 request here that runs `tools/generate.py --lock` (the em-profiles commit in
 `sources.lock.json`) and commits `index.json`.
 
+## The signature (row X8)
+
+On `main` the CI signs what it publishes with a **minisign** key (Ed25519):
+`<archive>.zip.minisig` beside every archive — its *trusted comment* names
+the entry's `id`, `version` and `archive_hash` — and `index.json.minisig`
+beside the index, where the `blocklist` and the `reviewed` live. The files
+are minisign's own:
+
+```
+minisign -Vm facemesh_fit-0.3.0.zip -p minisign.pub
+```
+
+The committed `index.json` is never signed itself (the signatures live in
+`dist/`), so `--check` keeps comparing the same bytes.
+
+A client that knows the public key reads this index only with a valid
+signature (otherwise it keeps the copy it had) and opens an archive only with
+its own; a mirror, a proxy or a copy on a NAS that changes the index and the
+archives together is refused. A signature says who published the bytes, not
+that anyone read the code: the question of trust stays, the reviewed are the
+list above.
+
+**Not yet switched on.** The key does not exist yet. To switch it on (E.D.):
+
+1. `python -m s3dgraphy.extensions sign keygen ~/em-extensions.key` (add
+   `--encrypt` with `S3DGRAPHY_SIGN_PASSWORD` set for a key kept on a
+   laptop; the CI's copy must be without password);
+2. the text of the secret key into the repository secret
+   `EM_EXTENSIONS_SIGNING_KEY` (*Settings ▸ Secrets and variables ▸ Actions*);
+3. commit `minisign.pub` at the root: from then on `tools/generate.py --sign`
+   fails when the secret is missing or is another key;
+4. the public key's line (`RW…`) into `OFFICIAL_KEYS` in
+   `s3dgraphy/extensions/remote.py`, so that the tools verify the official
+   index without the person pasting it.
+
+Until then `--sign` says «published unsigned» and nothing changes for the
+clients.
+
 ## Other repositories
 
 Anybody can serve a repository of their own — a project, a laboratory, a
@@ -123,6 +161,11 @@ python -m s3dgraphy.extensions server-generate --repo-dir FOLDER [--html]
 
 `archive_url` is then relative to the index, so the folder works the same
 over HTTPS and as `file:///…/index.json` (decision D-13).
+
+To sign it (row X8): `python -m s3dgraphy.extensions sign keygen lab.key`
+once, then `server-generate --repo-dir FOLDER --sign-key lab.key` each time;
+give `minisign.pub` (or its `RW…` line) to whoever adds the repository
+(*Extensions ▸ Repositories ▸ + ▸ Public key*, or `repo add URL --key RW…`).
 
 ## Licences
 

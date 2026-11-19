@@ -31,6 +31,15 @@
    ``plugins/`` does not review it alone. Add a line with
    ``python -m s3dgraphy.extensions review add <archive> --reviewed . --by @you --as …``.
 
+6. The signature (row X8): with ``--sign`` the archives and the index of
+   ``dist/`` get their minisign ``.minisig`` (the secret key's text in the
+   environment variable ``EM_EXTENSIONS_SIGNING_KEY``, a secret of the CI;
+   ``--sign-key FILE`` on a curator's machine). When ``minisign.pub`` is
+   committed at the root, ``--sign`` without a key is an error, and the
+   signatures are verified with that public key before anything is
+   published. The committed ``index.json`` is never signed itself: the
+   signatures live beside it in ``dist/`` (``--check`` stays the same bytes).
+
 ``--lock`` writes the em-profiles commit of the checkout into
 ``sources.lock.json`` (refused when ``profiles/`` there has changes not
 committed). Exit 1 on any error; warnings never fail.
@@ -49,6 +58,9 @@ from typing import Dict, List, Optional
 REPO = Path(__file__).resolve().parents[1]
 BASE_URL = "https://extendedmatrix.github.io/em-extensions/"
 LOCK = "sources.lock.json"
+#: X8 · the public key committed here, and where the CI's secret key comes from
+PUBLIC_KEY = "minisign.pub"
+KEY_ENV = "EM_EXTENSIONS_SIGNING_KEY"
 
 #: this repository's own problems, in the two languages of the EM tools
 MESSAGES = {
@@ -69,6 +81,14 @@ MESSAGES = {
                      "{id}: in em-profiles e in plugins/ — un id, un posto"),
     "gen_index_differs": ("index.json is not the index of these sources: run tools/generate.py and commit it",
                           "index.json non è l'indice di queste sorgenti: lancia tools/generate.py e committalo"),
+    # X8 · the signature
+    "gen_sign_no_key": ("--sign: no secret key ({env} is empty and no --sign-key): {pub} is committed, so the index must be signed",
+                        "--sign: nessuna chiave segreta ({env} è vuota e manca --sign-key): {pub} è committata, quindi l'indice va firmato"),
+    "gen_sign_unsigned": ("--sign: no secret key and no {pub} committed: the index is published unsigned",
+                          "--sign: nessuna chiave segreta e nessuna {pub} committata: l'indice si pubblica senza firma"),
+    "gen_sign_failed": ("the signature: {why}", "la firma: {why}"),
+    "gen_sign_other_key": ("signed with the key {got}, but {pub} is the key {want}: the public key and the CI's secret do not match",
+                           "firmato con la chiave {got}, ma {pub} è la chiave {want}: la chiave pubblica e il segreto della CI non vanno insieme"),
     # X4 · who may review (decision D-6)
     "gen_review_by": ("reviewed.json: {id}: by must be a GitHub handle (@name), not {by!r}",
                       "reviewed.json: {id}: by dev'essere un nome GitHub (@nome), non {by!r}"),
@@ -197,8 +217,33 @@ def review_checks(root: Path, em_profiles: Path) -> List[Dict]:
     return out
 
 
+def sign_dist(root: Path, out: Path, key_text: Optional[str]) -> List[Dict]:
+    """X8 · the .minisig of every archive and of the index of ``out``, then
+    checked with the committed ``minisign.pub`` when there is one."""
+    from s3dgraphy.extensions import signing
+    pub = root / PUBLIC_KEY
+    if not key_text:
+        if pub.is_file():
+            return [problem("gen_sign_no_key", env=KEY_ENV, pub=PUBLIC_KEY)]
+        return [problem("gen_sign_unsigned", level="warning", pub=PUBLIC_KEY)]
+    try:
+        got = signing.sign_repository(out, key_text)
+    except signing.SignatureError as exc:
+        return [problem("gen_sign_failed", why=exc.problem.text("en"))]
+    if not got["ok"]:
+        return [problem("gen_sign_failed", why="; ".join(p["en"] for p in got["problems"]))]
+    if pub.is_file():
+        want = signing.parse_public_key(pub.read_text(encoding="utf-8"))
+        if want.id != got["key_id"]:
+            return [problem("gen_sign_other_key", got=got["key_id"], want=want.id, pub=PUBLIC_KEY)]
+        v = signing.verify_repository(out, [want])
+        if not v["ok"]:
+            return [problem("gen_sign_failed", why="; ".join(p["en"] for p in v["problems"]))]
+    return []
+
+
 def generate(em_profiles: Path, *, root: Path = None, base_url: str = BASE_URL, out: Path = None,
-             check: bool = False, lock: bool = False) -> Dict:
+             check: bool = False, lock: bool = False, sign: bool = False, sign_key: Optional[str] = None) -> Dict:
     from s3dgraphy.extensions import build, server_generate
     from s3dgraphy.profiles.package import open_package
 
@@ -246,6 +291,8 @@ def generate(em_profiles: Path, *, root: Path = None, base_url: str = BASE_URL, 
     res["problems"] += gen["problems"]
     for x in gen["refused"]:
         res["problems"] += [p for p in x["errors"] if p not in gen["problems"]]
+    if sign:
+        res["problems"] += sign_dist(root, out, sign_key)
     committed = root / "index.json"
     text = (out / "index.json").read_text(encoding="utf-8")
     if check:
@@ -266,10 +313,16 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, default=REPO / "dist", help="the archives, index.json and index.html")
     ap.add_argument("--check", action="store_true", help="fail when the committed index.json is not this one")
     ap.add_argument("--lock", action="store_true", help="record the em-profiles commit in sources.lock.json")
+    ap.add_argument("--sign", action="store_true",
+                    help=f"sign dist/ (X8): the secret key from ${KEY_ENV} or --sign-key")
+    ap.add_argument("--sign-key", type=Path, default=None, help="a minisign secret key file (a curator's machine)")
     ap.add_argument("--lang", default="en", choices=("en", "it"))
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
-    res = generate(a.em_profiles, base_url=a.base_url, out=a.out, check=a.check, lock=a.lock)
+    import os
+    key = a.sign_key.read_text(encoding="utf-8") if a.sign_key else os.environ.get(KEY_ENV) or None
+    res = generate(a.em_profiles, base_url=a.base_url, out=a.out, check=a.check, lock=a.lock,
+                   sign=a.sign or bool(a.sign_key), sign_key=key)
     if a.json:
         print(json.dumps(res, indent=1, ensure_ascii=False))
         return 0 if res["ok"] else 1

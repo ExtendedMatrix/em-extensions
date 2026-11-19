@@ -80,6 +80,35 @@ def test_packages_and_plugins_listed_with_their_sections(frame, tmp_path):
 
 
 @needs_examples
+def test_the_signature_of_dist(frame, tmp_path):
+    """X8 · --sign: dist/ signed with the CI's secret key (minisign over archive_hash); the committed
+    index.json never changes; with minisign.pub committed, no key or another key fails."""
+    from s3dgraphy.extensions import signing as S
+    root, emp = frame
+    shutil.copytree(EXAMPLES / "esempio-statuaria", emp / "profiles" / "esempio-statuaria")
+    sk = S.generate_key()
+    key_text = S.secret_key_text(sk)
+    res = generate.generate(emp, root=root, out=tmp_path / "dist")
+    plain = (root / "index.json").read_bytes()
+    # no key and no minisign.pub: published unsigned, said (a warning: the state before E.D. makes the key)
+    res = generate.generate(emp, root=root, out=tmp_path / "dist", check=True, sign=True)
+    assert res["ok"] and _codes(res, "warning") == ["gen_sign_unsigned"]
+    res = generate.generate(emp, root=root, out=tmp_path / "dist", check=True, sign=True, sign_key=key_text)
+    assert res["ok"], res["problems"]
+    assert (root / "index.json").read_bytes() == plain
+    assert (tmp_path / "dist" / "index.json.minisig").is_file()
+    assert (tmp_path / "dist" / "esempio-statuaria-0.1.0.zip.minisig").is_file()
+    assert S.verify_repository(tmp_path / "dist", [sk.public])["ok"]
+    # minisign.pub committed: the key is required, and must be that one
+    (root / generate.PUBLIC_KEY).write_text(sk.public.text(), encoding="utf-8")
+    assert _codes(generate.generate(emp, root=root, out=tmp_path / "dist", check=True, sign=True)) == ["gen_sign_no_key"]
+    other = S.secret_key_text(S.generate_key())
+    res = generate.generate(emp, root=root, out=tmp_path / "dist", check=True, sign=True, sign_key=other)
+    assert _codes(res) == ["gen_sign_other_key"]
+    assert generate.generate(emp, root=root, out=tmp_path / "dist", check=True, sign=True, sign_key=key_text)["ok"]
+
+
+@needs_examples
 def test_the_place_of_a_plugin(frame, tmp_path):
     root, emp = frame
     shutil.copytree(EXAMPLES / "facemesh_fit", root / "plugins" / "facemesh")       # folder ≠ id, no owners

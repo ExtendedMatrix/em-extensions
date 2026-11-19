@@ -24,6 +24,13 @@ jobs:
       - name: the committed index.json is the index of these sources
         run: python tools/generate.py --em-profiles em-profiles --check
       - run: pytest -q
+      # X8 · on main, dist/ signed with the secret key (minisign over archive_hash); with minisign.pub
+      # committed, a missing or other key fails here, before anything is published
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        name: the signatures of the archives and of the index
+        env:
+          EM_EXTENSIONS_SIGNING_KEY: ${{ secrets.EM_EXTENSIONS_SIGNING_KEY }}
+        run: python tools/generate.py --em-profiles em-profiles --check --sign
       - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
