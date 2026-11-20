@@ -189,6 +189,14 @@ once, then `server-generate --repo-dir FOLDER --sign-key lab.key` each time;
 give `minisign.pub` (or its `RW…` line) to whoever adds the repository
 (*Extensions ▸ Repositories ▸ + ▸ Public key*, or `repo add URL --key RW…`).
 
+## Building a package or a plugin
+
+The EMStudio manual has a guide for whoever builds one, from an empty folder to
+a published archive — data only or with Python, the slots, the `em` API, the
+validator's messages, a repository of your own signed with its key, and this
+index: [Extending EMStudio](https://docs.extendedmatrix.org/projects/emstudio-doc/en/1.6/extending/index.html)
+(in Italian: [Estendere EMStudio](https://docs.extendedmatrix.org/projects/emstudio-doc/it/1.6/extending/index.html)).
+
 ## Licences
 
 See [LICENSING.md](LICENSING.md). Contributing a plugin:
